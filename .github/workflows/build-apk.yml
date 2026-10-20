@@ -1,0 +1,62 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Android project
+        run: |
+          mkdir -p /tmp/keep
+          cp -a lib /tmp/keep/lib
+          cp pubspec.yaml /tmp/keep/pubspec.yaml
+          flutter create --org com.freetv.app --project-name free_tv --platforms android .
+          rm -rf lib
+          cp -a /tmp/keep/lib lib
+          cp /tmp/keep/pubspec.yaml pubspec.yaml
+
+      - name: Force Kotlin Version
+        run: |
+          if [ -f android/build.gradle ]; then
+            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '2.2.21'/" android/build.gradle
+          fi
+          if [ -f android/settings.gradle ]; then
+            sed -i "s/id \"org.jetbrains.kotlin.android\" version \".*\"/id \"org.jetbrains.kotlin.android\" version \"2.2.21\"/" android/settings.gradle
+          fi
+          echo "--- Kotlin check ---"
+          grep -i kotlin android/build.gradle || true
+          grep -i kotlin android/settings.gradle || true
+
+      - name: Android permissions
+        run: python3 tool/patch_android.py
+
+      - name: Packages
+        run: flutter pub get
+
+      - name: Fix old Android plugins
+        run: python3 tool/patch_plugins.py
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Free-TV
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 14
