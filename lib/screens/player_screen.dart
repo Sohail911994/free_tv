@@ -15,63 +15,100 @@ class PlayerScreen extends StatefulWidget {
 class _PlayerScreenState extends State<PlayerScreen> {
   BetterPlayerController? _controller;
   bool _failed = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _setup();
+    _setupPlayer();
   }
 
   Map<String, String>? _headers() {
     final headers = <String, String>{};
+
     if (widget.channel.userAgent.isNotEmpty) {
       headers['User-Agent'] = widget.channel.userAgent;
     }
     if (widget.channel.referrer.isNotEmpty) {
       headers['Referer'] = widget.channel.referrer;
     }
-    if (headers.isEmpty) return null;
-    return headers;
+
+    return headers.isEmpty ? null : headers;
   }
 
-  void _setup() {
+  Future<void> _setupPlayer() async {
+    final headers = _headers();
+
     final source = BetterPlayerDataSource(
       BetterPlayerDataSourceType.network,
       widget.channel.url,
       liveStream: true,
-      headers: _headers(),
+      headers: headers,
+      // use this if your stream is HLS/M3U8:
+      // videoFormat: VideoFormat.hls,
     );
-    final controller = BetterPlayerController(
-      const BetterPlayerConfiguration(
-        autoPlay: true,
-        aspectRatio: 16 / 9,
-        fit: BoxFit.contain,
-        handleLifecycle: true,
-        allowedScreenSleep: false,
-        controlsConfiguration: BetterPlayerControlsConfiguration(
-          enableSkips: false,
-          enablePlaybackSpeed: false,
-          enableFullscreen: true,
-        ),
+
+    final config = BetterPlayerConfiguration(
+      autoPlay: true,
+      aspectRatio: 16 / 9,
+      fit: BoxFit.contain,
+      handleLifecycle: true,
+      allowedScreenSleep: false,
+      looping: false,
+      controlsConfiguration: const BetterPlayerControlsConfiguration(
+        enableSkips: false,
+        enablePlaybackSpeed: false,
+        enableFullscreen: true,
+        enableMute: true,
+        enableQualities: false,
       ),
+    );
+
+    final controller = BetterPlayerController(
+      config,
       betterPlayerDataSource: source,
     );
+
     controller.addEventsListener((event) {
-      if (event.betterPlayerEventType == BetterPlayerEventType.exception && mounted) {
-        setState(() => _failed = true);
+      if (!mounted) return;
+
+      if (event.betterPlayerEventType == BetterPlayerEventType.exception) {
+        setState(() {
+          _failed = true;
+          _loading = false;
+        });
+      }
+
+      if (event.betterPlayerEventType == BetterPlayerEventType.initialized) {
+        setState(() {
+          _failed = false;
+          _loading = false;
+        });
       }
     });
-    setState(() => _controller = controller);
+
+    setState(() {
+      _controller = controller;
+      _loading = false;
+    });
   }
 
   void _retry() {
-    _controller?.dispose();
-    setState(() => _failed = false);
-    _setup();
+    if (_controller != null) {
+      _controller!.dispose();
+    }
+
+    setState(() {
+      _failed = false;
+      _loading = true;
+    });
+
+    _setupPlayer();
   }
 
   @override
   void dispose() {
+    _controller?.removeEventsListener((event) {});
     _controller?.dispose();
     super.dispose();
   }
@@ -79,10 +116,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F1E),
       appBar: AppBar(
-        title: Text(widget.channel.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        title: Text(
+          widget.channel.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -92,34 +134,50 @@ class _PlayerScreenState extends State<PlayerScreen> {
             child: ColoredBox(
               color: Colors.black,
               child: controller == null
-                  ? const SizedBox.shrink()
+                  ? const Center(
+                      child: CircularProgressIndicator(color: Colors.tealAccent),
+                    )
                   : Stack(
                       fit: StackFit.expand,
                       children: [
                         BetterPlayer(controller: controller),
+                        if (_loading)
+                          const Positioned.fill(
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: Colors.tealAccent,
+                              ),
+                            ),
+                          ),
                         if (_failed)
                           ColoredBox(
                             color: const Color(0xCC0F0F1E),
                             child: Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    'Stream start nahi hui',
-                                    style: TextStyle(color: Colors.white),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Link band ho sakti hai, ya is mulk mein block hai.',
-                                    style: TextStyle(color: Colors.white54, fontSize: 13),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  FilledButton.icon(
-                                    onPressed: _retry,
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Retry'),
-                                  ),
-                                ],
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      'Stream start nahi hui',
+                                      style: TextStyle(color: Colors.white),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Link dead ho sakti hai ya network block ho sakti hai.',
+                                      style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    FilledButton.icon(
+                                      onPressed: _retry,
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Retry'),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
