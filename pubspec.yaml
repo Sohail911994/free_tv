@@ -11,7 +11,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.1.0
-  better_player: ^0.0.83
+  better_player_plus: ^1.0.7
   shared_preferences: ^2.2.2
   cached_network_image: ^3.3.0
 
