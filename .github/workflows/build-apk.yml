@@ -33,15 +33,13 @@ jobs:
 
       - name: Force Kotlin Version
         run: |
+          # Stable Kotlin version
           if [ -f android/build.gradle ]; then
-            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '2.2.21'/" android/build.gradle
+            sed -i "s/ext.kotlin_version = .*/ext.kotlin_version = '2.0.21'/" android/build.gradle
           fi
           if [ -f android/settings.gradle ]; then
-            sed -i "s/id \"org.jetbrains.kotlin.android\" version \".*\"/id \"org.jetbrains.kotlin.android\" version \"2.2.21\"/" android/settings.gradle
+            sed -i "s/id \"org.jetbrains.kotlin.android\" version \".*\"/id \"org.jetbrains.kotlin.android\" version \"2.0.21\"/" android/settings.gradle
           fi
-          echo "--- Kotlin check ---"
-          grep -i kotlin android/build.gradle || true
-          grep -i kotlin android/settings.gradle || true
 
       - name: Android permissions
         run: python3 tool/patch_android.py
@@ -52,8 +50,20 @@ jobs:
       - name: Fix old Android plugins
         run: python3 tool/patch_plugins.py
 
+      # --- R8 CRASH FIX ---
+      - name: Create ProGuard Rules
+        run: |
+          echo "-keep class com.jhomlala.better_player.** { *; }" > android/app/proguard-rules.pro
+          echo "-keep class androidx.media3.** { *; }" >> android/app/proguard-rules.pro
+          echo "-dontwarn com.jhomlala.better_player.**" >> android/app/proguard-rules.pro
+          echo "-dontwarn com.google.android.play.core.**" >> android/app/proguard-rules.pro
+
+      - name: Clean Build
+        run: flutter clean
+
+      # --- NO SHRINK FIX (App crash nahi hogi) ---
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --no-shrink
 
       - uses: actions/upload-artifact@v4
         with:
