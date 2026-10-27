@@ -1,0 +1,8 @@
+-keep class io.flutter.** { *; }
+-keep class io.flutter.plugins.** { *; }
+-keep class androidx.media3.** { *; }
+-dontwarn com.google.android.play.core.**
+-dontwarn androidx.media3.**
+-dontwarn org.conscrypt.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openjsse.**
